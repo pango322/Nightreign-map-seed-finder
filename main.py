@@ -3,7 +3,6 @@ import tkinter as tk
 from PIL import Image, ImageTk
 import time
 import maps_databases
-from ctk_xyframe import *
 
 root = ctk.CTk()
 root.geometry("1200x1200+100+100")
@@ -362,3 +361,4 @@ canvas.pack(padx=5, pady=5)
 #dataButton.pack(padx=5, pady=5)
 #setseedbutton.pack(padx=5, pady=5)
 root.mainloop()
+
