@@ -1,7 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image, ImageTk
-import time
 import maps_databases
 
 root = ctk.CTk()
@@ -19,6 +18,11 @@ crater =       ImageTk.PhotoImage(Image.open("assets/crater.png").resize(map_siz
 mountain =     ImageTk.PhotoImage(Image.open("assets/mountain.png").resize(map_size))
 normal =       ImageTk.PhotoImage(Image.open("assets/normal.png").resize(map_size))
 swamp =        ImageTk.PhotoImage(Image.open("assets/swamp.png").resize(map_size))
+
+# Singleton preview window state
+preview_win = None
+preview_label = None
+last_preview = {"seed": None, "map": None}
 
 
 name_to_img = {
@@ -75,10 +79,10 @@ normal_spots = [
     (0.58, 0.42, placeholder), (0.41, 0.31, placeholder), (0.40, 0.19, placeholder), (0.63, 0.48, placeholder)
 ]
 mountain_spots = [
-    (0.69, 0.23, placeholder), (0.21, 0.46, placeholder), (0.31, 0.56, placeholder),
-    (0.27, 0.67, placeholder), (0.77, 0.43, placeholder), (0.63, 0.59, placeholder), (0.74, 0.64, placeholder),
-    (0.61, 0.68, placeholder), (0.74, 0.75, placeholder), (0.39, 0.78, placeholder), (0.63, 0.29, placeholder),
-    (0.58, 0.42, placeholder), (0.65, 0.48, placeholder)
+    (0.69, 0.23, placeholder), (0.21, 0.46, placeholder), (0.31, 0.56, placeholder), (0.27, 0.67, placeholder),
+    (0.77, 0.43, placeholder), (0.63, 0.59, placeholder), (0.74, 0.64, placeholder), (0.61, 0.68, placeholder),
+    (0.74, 0.75, placeholder), (0.39, 0.78, placeholder), (0.63, 0.29, placeholder), (0.58, 0.42, placeholder),
+    (0.65, 0.48, placeholder)
 ]
 crater_spots = [
     (0.23, 0.28, placeholder), (0.69, 0.23, placeholder), (0.28, 0.45, placeholder), (0.31, 0.56, placeholder),
@@ -112,6 +116,28 @@ for a in swamp_spots:
 city_icons = []
 for a in city_spots:
     city_icons.append(Icon(a[0], a[1], a[2])) #initialize the icons position before anything just so we have it ready
+
+def icons_from_spots(spots):
+    newicons = []
+    for x, y, img in spots:
+        newicons.append(Icon(x, y, img))
+    return newicons
+
+def reset_to_defaults():
+    global current_icons
+    if active_map is normal:
+        base_spots = normal_spots
+    elif active_map is crater:
+        base_spots = crater_spots
+    elif active_map is mountain:
+        base_spots = mountain_spots
+    elif active_map is swamp:
+        base_spots = swamp_spots
+    else:
+        base_spots = city_spots
+
+    current_icons = icons_from_spots(base_spots)
+    drawall()
 
 canvas = tk.Canvas(root, width=map_size[0], height=map_size[1], bd = 0, highlightthickness = 2, bg = root.cget("background"))
 def drawall():
@@ -240,10 +266,31 @@ def checksimilar():
     if len(matches) == 1:
         print(f"Detected seed: {matches[0]}")
         setseed(matches[0])
+        openmap(matches[0])
     elif len(matches) == 0:
         print("No matching seed yet.")
     else:
         print(f"Candidate seeds: {matches}")
+def openmap(seed_code):
+    global preview_win, preview_label
+    map_to_name = {normal: "normal", mountain: "mountain", crater: "crater", swamp: "swamp", city: "city"}
+    folder = map_to_name[active_map]
+    path = f"assets/{folder}/{seed_code}.jpg"
+
+    if preview_win is None or not preview_win.winfo_exists():
+        preview_win = ctk.CTkToplevel(root)
+        preview_win.geometry('1000x1000')
+        preview_label = ctk.CTkLabel(preview_win, text="")
+        preview_label.pack(padx=10, pady=10)
+
+    img = Image.open(path)
+    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(1000, 1000))
+    preview_label.configure(image=ctk_img, text="")
+    preview_label._image = ctk_img  # prevent GC
+    preview_win.title(f"Seed {seed_code} – {folder}")
+    preview_win.lift()
+
+
 
 def Set_boss_preset(newboss):
     global current_boss, active_map
@@ -358,7 +405,8 @@ map_selection.pack()
 ctk.CTkLabel(root, textvariable=seed).pack()
 boss_selection.pack(side="top", padx=10, pady=10)
 canvas.pack(padx=5, pady=5)
+
+ctk.CTkButton(root, text="clear", command=reset_to_defaults).pack(padx=5, pady=5)
 #dataButton.pack(padx=5, pady=5)
 #setseedbutton.pack(padx=5, pady=5)
 root.mainloop()
-
