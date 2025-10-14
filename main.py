@@ -1,7 +1,6 @@
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image, ImageTk
-import time
 import maps_databases
 
 root = ctk.CTk()
@@ -19,6 +18,11 @@ crater =       ImageTk.PhotoImage(Image.open("assets/crater.png").resize(map_siz
 mountain =     ImageTk.PhotoImage(Image.open("assets/mountain.png").resize(map_size))
 normal =       ImageTk.PhotoImage(Image.open("assets/normal.png").resize(map_size))
 swamp =        ImageTk.PhotoImage(Image.open("assets/swamp.png").resize(map_size))
+
+# Singleton preview window state
+preview_win = None
+preview_label = None
+last_preview = {"seed": None, "map": None}
 
 
 name_to_img = {
@@ -75,10 +79,10 @@ normal_spots = [
     (0.58, 0.42, placeholder), (0.41, 0.31, placeholder), (0.40, 0.19, placeholder), (0.63, 0.48, placeholder)
 ]
 mountain_spots = [
-    (0.69, 0.23, placeholder), (0.21, 0.46, placeholder), (0.31, 0.56, placeholder),
-    (0.27, 0.67, placeholder), (0.77, 0.43, placeholder), (0.63, 0.59, placeholder), (0.74, 0.64, placeholder),
-    (0.61, 0.68, placeholder), (0.74, 0.75, placeholder), (0.39, 0.78, placeholder), (0.63, 0.29, placeholder),
-    (0.58, 0.42, placeholder), (0.65, 0.48, placeholder)
+    (0.69, 0.23, placeholder), (0.21, 0.46, placeholder), (0.31, 0.56, placeholder), (0.27, 0.67, placeholder),
+    (0.77, 0.43, placeholder), (0.63, 0.59, placeholder), (0.74, 0.64, placeholder), (0.61, 0.68, placeholder),
+    (0.74, 0.75, placeholder), (0.39, 0.78, placeholder), (0.63, 0.29, placeholder), (0.58, 0.42, placeholder),
+    (0.65, 0.48, placeholder)
 ]
 crater_spots = [
     (0.23, 0.28, placeholder), (0.69, 0.23, placeholder), (0.28, 0.45, placeholder), (0.31, 0.56, placeholder),
@@ -112,6 +116,28 @@ for a in swamp_spots:
 city_icons = []
 for a in city_spots:
     city_icons.append(Icon(a[0], a[1], a[2])) #initialize the icons position before anything just so we have it ready
+
+def icons_from_spots(spots):
+    newicons = []
+    for x, y, img in spots:
+        newicons.append(Icon(x, y, img))
+    return newicons
+
+def reset_to_defaults():
+    global current_icons
+    if active_map is normal:
+        base_spots = normal_spots
+    elif active_map is crater:
+        base_spots = crater_spots
+    elif active_map is mountain:
+        base_spots = mountain_spots
+    elif active_map is swamp:
+        base_spots = swamp_spots
+    else:
+        base_spots = city_spots
+
+    current_icons = icons_from_spots(base_spots)
+    drawall()
 
 canvas = tk.Canvas(root, width=map_size[0], height=map_size[1], bd = 0, highlightthickness = 2, bg = root.cget("background"))
 def drawall():
@@ -152,51 +178,6 @@ def openOptions(icon):
             ctk.CTkButton(secondRow, text="", image=aff_to_img[aff], width=32,height=32, command= lambda a=aff: (icon.changeaff(a), checksimilar(), optionWindow.destroy())).pack(side="left", padx=1)
         else:
             ctk.CTkButton(secondRow, text="none", width=32,height=32, command= lambda a=aff: (icon.changeaff(a), checksimilar(), optionWindow.destroy())).pack(side="left", padx=1)
-
-def checksimilar():
-    image_to_name = {v: k for k, v in name_to_img.items()}
-    #image_to_name = {ruins: "ruins", fort: "fort", camp: "camp", great_church: "great_church", placeholder: "placeholder"}
-
-    spot_count = len(current_icons)
-    known = {}
-    for i in range(spot_count):
-        ic = current_icons[i]
-        if ic.aff not in placeholder:
-            sname = image_to_name.get(ic.img)
-            if ic.aff not in known:
-                known[i] = (sname, ic.aff)
-
-    matches = []
-    for seed_id, data in maps_databases.map_database.items():
-        seq = []
-        for k, v in data:
-            if k == "boss":
-                continue
-        seq.append((k,v))
-        if len(seq) >= spot_count:
-            break
-
-    ok = True
-    for idx in known:
-        if idx >= len(seq):
-            ok = False
-            break
-        ks, kv = seq[idx]
-        ks2, kv2 = known[idx]
-        if ks != ks2 or kv != kv2:
-            ok = False
-            break
-
-    if ok:
-        matches.append(seed_id)
-
-    if len(matches) == 1:
-        print(f"Detected {matches[0]} seeds")
-    elif len(matches) == 0:
-        print("No matching seed yet.")
-    else:
-        print(f"your seed is: {matches}")
-
 
 def checksimilar():
     # Build reverse lookup for structure names from images
@@ -240,10 +221,31 @@ def checksimilar():
     if len(matches) == 1:
         print(f"Detected seed: {matches[0]}")
         setseed(matches[0])
+        openmap(matches[0])
     elif len(matches) == 0:
         print("No matching seed yet.")
     else:
         print(f"Candidate seeds: {matches}")
+def openmap(seed_code):
+    global preview_win, preview_label
+    map_to_name = {normal: "normal", mountain: "mountain", crater: "crater", swamp: "swamp", city: "city"}
+    folder = map_to_name[active_map]
+    path = f"assets/{folder}/{seed_code}.jpg"
+
+    if preview_win is None or not preview_win.winfo_exists():
+        preview_win = ctk.CTkToplevel(root)
+        preview_win.geometry('1000x1000')
+        preview_label = ctk.CTkLabel(preview_win, text="")
+        preview_label.pack(padx=10, pady=10)
+
+    img = Image.open(path)
+    ctk_img = ctk.CTkImage(light_image=img, dark_image=img, size=(1000, 1000))
+    preview_label.configure(image=ctk_img, text="")
+    preview_label._image = ctk_img  # prevent GC
+    preview_win.title(f"Seed {seed_code} – {folder}")
+    preview_win.lift()
+
+
 
 def Set_boss_preset(newboss):
     global current_boss, active_map
@@ -349,16 +351,17 @@ current_boss = bosses[0]
 current_icons = normal_icons
 drawall()
 
-boss_selection = ctk.CTkComboBox(root, values=bosses, command=Set_boss_preset)
+#boss_selection = ctk.CTkComboBox(root, values=bosses, command=Set_boss_preset)
 map_selection = ctk.CTkComboBox(root, values=["normal", "crater", "mountain", "swamp", "city"], command=Set_map_preset)
-dataButton = ctk.CTkButton(root, text="give Data", command=lambda: giveData(seed, current_boss, current_icons))
+#dataButton = ctk.CTkButton(root, text="give Data", command=lambda: giveData(seed, current_boss, current_icons))
 
-setseedbutton = ctk.CTkButton(root, text="Seed Selection", command=seedselectionbox)
+#setseedbutton = ctk.CTkButton(root, text="Seed Selection", command=seedselectionbox)
 map_selection.pack()
 ctk.CTkLabel(root, textvariable=seed).pack()
-boss_selection.pack(side="top", padx=10, pady=10)
+#boss_selection.pack(side="top", padx=10, pady=10)
 canvas.pack(padx=5, pady=5)
+
+ctk.CTkButton(root, text="clear", command=reset_to_defaults).pack(padx=5, pady=5)
 #dataButton.pack(padx=5, pady=5)
 #setseedbutton.pack(padx=5, pady=5)
 root.mainloop()
-
